@@ -7,8 +7,8 @@
 
 - [x] **Tarefa 0.1** — Setup inicial do repositório e projeto Maven (Java 21, Spring Boot 3, estrutura de pacotes, README com roteiro, LICENSE MIT, Maven Wrapper)
 - [x] **Tarefa 0.2** — Docker Compose (PostgreSQL + Redis)
-- [ ] **Tarefa 0.3** — Configuração de perfis de ambiente (application.yml para dev/test)
-- [ ] **Tarefa 0.4** — Setup base de testes (JUnit + Testcontainers)
+- [x] **Tarefa 0.3** — Configuração de perfis de ambiente (application.yml para dev/test)
+- [x] **Tarefa 0.4** — Setup base de testes (JUnit + Testcontainers)
 
 ## Fase 1 — Multi-tenancy e Modelagem Base
 

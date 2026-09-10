@@ -19,8 +19,6 @@ Em desenvolvimento — projeto de portfólio.
 ## Roteiro do Projeto
 
 - [x] **Fase 0 — Fundamentos e Setup**
-  - [x] Tarefa 0.1 — Setup inicial do repositório e projeto Maven
-  - [ ] Tarefa 0.2 — Docker Compose (PostgreSQL + Redis)
 - [ ] **Fase 1 — Multi-tenancy e Modelagem Base**
 - [ ] **Fase 2 — Identidade e Cadastro de Usuários**
 - [ ] **Fase 3 — Autenticação (JWT)**
@@ -31,6 +29,8 @@ Em desenvolvimento — projeto de portfólio.
 - [ ] **Fase 8 — Testes**
 - [ ] **Fase 9 — Observabilidade e Documentação**
 - [ ] **Fase 10 — Finalização**
+
+> **OBS:** Para visualizar o roteiro detalhado, contendo as tarefas de cada fase, acesse o [**ROADMAP**](https://github.com/thaleswillreis/multitenant-auth-api/blob/main/ROADMAP.md) do projeto.
 
 ## Como rodar localmente
 

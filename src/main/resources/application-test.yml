@@ -1,0 +1,4 @@
+logging:
+    level:
+        root: WARN
+        com.thaleswillreis.authapi: INFO
