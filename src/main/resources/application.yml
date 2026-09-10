@@ -3,6 +3,16 @@ spring:
     name: multitenant-auth-api
   profiles:
     active: dev
+  datasource:
+    url: jdbc:postgresql://localhost:5432/${POSTGRES_DB:multitenant_auth}
+    username: ${POSTGRES_USER:auth_user}
+    password: ${POSTGRES_PASSWORD:changeme}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
 
 server:
   port: 8080
