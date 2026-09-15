@@ -19,7 +19,7 @@ Em desenvolvimento — projeto de portfólio.
 ## Roteiro do Projeto
 
 - [x] **Fase 0 — Fundamentos e Setup**
-- [ ] **Fase 1 — Multi-tenancy e Modelagem Base**
+- [x] **Fase 1 — Multi-tenancy e Modelagem Base**
 - [ ] **Fase 2 — Identidade e Cadastro de Usuários**
 - [ ] **Fase 3 — Autenticação (JWT)**
 - [ ] **Fase 4 — Autorização (RBAC)**

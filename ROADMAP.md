@@ -18,7 +18,7 @@
 
 ## Fase 2 — Identidade e Cadastro de Usuários
 
-- [ ] **Tarefa 2.1** — CRUD de usuários (criação, listagem, consulta)
+- [x] **Tarefa 2.1** — CRUD de usuários (criação, listagem, consulta)
 - [ ] **Tarefa 2.2** — Hashing de senha (BCrypt/Argon2)
 - [ ] **Tarefa 2.3** — Validações de entrada (Bean Validation)
 

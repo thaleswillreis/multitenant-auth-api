@@ -2,11 +2,16 @@ package com.thaleswillreis.authapi.tenant;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
-import org.aspectj.lang.annotation.Before;
 import org.hibernate.Session;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.lang.reflect.UndeclaredThrowableException;
 import java.util.UUID;
 
 @Aspect
@@ -18,17 +23,37 @@ public class TenantFilterAspect {
     @PersistenceContext
     private EntityManager entityManager;
 
-    @Before("execution(* com.thaleswillreis.authapi.repository.*.*(..))")
-    public void enableTenantFilter() {
+    private final TransactionTemplate transactionTemplate;
+
+    public TenantFilterAspect(PlatformTransactionManager transactionManager) {
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+    }
+
+    @Around("execution(* com.thaleswillreis.authapi.repository.*.*(..))")
+    public Object applyTenantFilter(ProceedingJoinPoint joinPoint) {
         UUID tenantId = TenantContext.getCurrentTenant();
 
         if (tenantId == null) {
-            return;
+            return proceedUnchecked(joinPoint);
         }
 
-        Session session = entityManager.unwrap(Session.class);
-        if (session.getEnabledFilter(FILTER_NAME) == null) {
-            session.enableFilter(FILTER_NAME).setParameter("tenantId", tenantId);
+        return transactionTemplate.execute(status -> {
+            Session session = entityManager.unwrap(Session.class);
+            if (session.getEnabledFilter(FILTER_NAME) == null) {
+                session.enableFilter(FILTER_NAME).setParameter("tenantId", tenantId);
+            }
+            return proceedUnchecked(joinPoint);
+        });
+    }
+
+    private Object proceedUnchecked(ProceedingJoinPoint joinPoint) {
+        try {
+            return joinPoint.proceed();
+        } catch (RuntimeException | Error e) {
+            throw e;
+        } catch (Throwable t) {
+            throw new UndeclaredThrowableException(t);
         }
     }
 
