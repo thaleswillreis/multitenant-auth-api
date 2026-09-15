@@ -14,7 +14,7 @@
 
 - [x] **Tarefa 1.1** — Modelagem da entidade `Tenant`
 - [x] **Tarefa 1.2** — Modelagem da entidade `User` vinculada ao tenant (coluna `tenant_id`)
-- [ ] **Tarefa 1.3** — Filtro automático de isolamento por tenant (Hibernate Filter)
+- [x] **Tarefa 1.3** — Filtro automático de isolamento por tenant (Hibernate Filter)
 
 ## Fase 2 — Identidade e Cadastro de Usuários
 
