@@ -8,6 +8,7 @@ import com.thaleswillreis.authapi.repository.TenantRepository;
 import com.thaleswillreis.authapi.repository.UserRepository;
 import com.thaleswillreis.authapi.tenant.TenantContext;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -19,10 +20,12 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final TenantRepository tenantRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public UserService(UserRepository userRepository, TenantRepository tenantRepository) {
+    public UserService(UserRepository userRepository, TenantRepository tenantRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.tenantRepository = tenantRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     public UserResponse create(CreateUserRequest request) {
@@ -33,8 +36,8 @@ public class UserService {
                     throw new ResponseStatusException(HttpStatus.CONFLICT, "Ja existe um usuario com esse email neste tenant");
                 });
 
-        // ATENCAO: password armazenado como texto puro - sera corrigido na Tarefa 2.2 (hashing com BCrypt)
-        User user = new User(tenant, request.getEmail(), request.getPassword());
+        String hashedPassword = passwordEncoder.encode(request.getPassword());
+        User user = new User(tenant, request.getEmail(), hashedPassword);
         userRepository.save(user);
 
         return new UserResponse(user);
