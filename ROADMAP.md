@@ -25,7 +25,7 @@
 ## Fase 3 — Autenticação (JWT)
 
 - [x] **Tarefa 3.1** — Configuração base do Spring Security
-- [ ] **Tarefa 3.2** — Endpoint de login com emissão de access token + refresh token
+- [x] **Tarefa 3.2** — Endpoint de login com emissão de access token + refresh token
 - [ ] **Tarefa 3.3** — Filtro de validação de token nas requisições
 
 ## Fase 4 — Autorização (RBAC)

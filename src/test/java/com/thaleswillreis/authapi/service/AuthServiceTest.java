@@ -1,0 +1,138 @@
+package com.thaleswillreis.authapi.service;
+
+import com.thaleswillreis.authapi.config.JwtProperties;
+import com.thaleswillreis.authapi.dto.LoginRequest;
+import com.thaleswillreis.authapi.dto.LoginResponse;
+import com.thaleswillreis.authapi.model.Tenant;
+import com.thaleswillreis.authapi.model.User;
+import com.thaleswillreis.authapi.repository.UserRepository;
+import com.thaleswillreis.authapi.security.JwtService;
+import com.thaleswillreis.authapi.tenant.TenantContext;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class AuthServiceTest {
+
+    @Mock
+    private UserRepository userRepository;
+
+    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private JwtService jwtService;
+    private AuthService authService;
+    private UUID tenantId;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        KeyPair keyPair = generator.generateKeyPair();
+
+        JwtProperties properties = new JwtProperties();
+        properties.setIssuer("test-issuer");
+        properties.setAccessTokenExpirationMinutes(15);
+        properties.setRefreshTokenExpirationDays(7);
+
+        jwtService = new JwtService(
+                (RSAPrivateKey) keyPair.getPrivate(),
+                (RSAPublicKey) keyPair.getPublic(),
+                properties
+        );
+
+        authService = new AuthService(userRepository, passwordEncoder, jwtService, properties);
+
+        tenantId = UUID.randomUUID();
+        TenantContext.setCurrentTenant(tenantId);
+    }
+
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
+    }
+
+    @Test
+    void loginSucceedsWithValidCredentials() throws Exception {
+        User user = newUser(tenantId, "joao@acme.com", "correct-password", true);
+
+        when(userRepository.findByTenantIdAndEmail(tenantId, "joao@acme.com")).thenReturn(Optional.of(user));
+
+        LoginResponse response = authService.login(loginRequest("joao@acme.com", "correct-password"));
+
+        assertThat(response.getAccessToken()).isNotBlank();
+        assertThat(response.getRefreshToken()).isNotBlank();
+        assertThat(response.getTokenType()).isEqualTo("Bearer");
+    }
+
+    @Test
+    void loginFailsWithWrongPassword() throws Exception {
+        User user = newUser(tenantId, "joao@acme.com", "correct-password", true);
+
+        when(userRepository.findByTenantIdAndEmail(tenantId, "joao@acme.com")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.login(loginRequest("joao@acme.com", "wrong-password")))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Credenciais invalidas");
+    }
+
+    @Test
+    void loginFailsWhenUserDoesNotExist() {
+        when(userRepository.findByTenantIdAndEmail(tenantId, "ninguem@acme.com")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.login(loginRequest("ninguem@acme.com", "qualquer-senha")))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Credenciais invalidas");
+    }
+
+    @Test
+    void loginFailsWhenUserIsInactive() throws Exception {
+        User user = newUser(tenantId, "joao@acme.com", "correct-password", false);
+
+        when(userRepository.findByTenantIdAndEmail(tenantId, "joao@acme.com")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.login(loginRequest("joao@acme.com", "correct-password")))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Credenciais invalidas");
+    }
+
+    private LoginRequest loginRequest(String email, String password) {
+        LoginRequest request = new LoginRequest();
+        request.setEmail(email);
+        request.setPassword(password);
+        return request;
+    }
+
+    private User newUser(UUID tenantId, String email, String rawPassword, boolean active) throws Exception {
+        Tenant tenant = new Tenant("Acme Corp", "acme");
+        setId(Tenant.class, tenant, tenantId);
+
+        User user = new User(tenant, email, passwordEncoder.encode(rawPassword));
+        setId(User.class, user, UUID.randomUUID());
+        user.setActive(active);
+        return user;
+    }
+
+    private void setId(Class<?> type, Object target, UUID id) throws Exception {
+        var idField = type.getDeclaredField("id");
+        idField.setAccessible(true);
+        idField.set(target, id);
+    }
+
+}
