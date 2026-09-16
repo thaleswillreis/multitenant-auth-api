@@ -20,7 +20,7 @@ Em desenvolvimento — projeto de portfólio.
 
 - [x] **Fase 0 — Fundamentos e Setup**
 - [x] **Fase 1 — Multi-tenancy e Modelagem Base**
-- [ ] **Fase 2 — Identidade e Cadastro de Usuários**
+- [x] **Fase 2 — Identidade e Cadastro de Usuários**
 - [ ] **Fase 3 — Autenticação (JWT)**
 - [ ] **Fase 4 — Autorização (RBAC)**
 - [ ] **Fase 5 — Gestão de Sessão e Revogação (Redis)**
