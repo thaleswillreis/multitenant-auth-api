@@ -117,4 +117,14 @@ public class User {
     public void addRole(Role role) {
         this.roles.add(role);
     }
+
+    public Set<String> getPermissionNames() {
+        Set<String> permissionNames = new HashSet<>();
+        for (Role role : roles) {
+            for (Permission permission : role.getPermissions()) {
+                permissionNames.add(permission.getName());
+            }
+        }
+        return permissionNames;
+    }
 }

@@ -31,7 +31,7 @@
 ## Fase 4 — Autorização (RBAC)
 
 - [x] **Tarefa 4.1** — Modelagem de `Role` e `Permission`
-- [ ] **Tarefa 4.2** — Checagem de acesso por papel (`@PreAuthorize`)
+- [x] **Tarefa 4.2** — Checagem de acesso por papel (`@PreAuthorize`)
 - [ ] **Tarefa 4.3** — Escopo das regras de autorização por tenant
 
 ## Fase 5 — Gestão de Sessão e Revogação (Redis)

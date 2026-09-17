@@ -1,6 +1,8 @@
 package com.thaleswillreis.authapi.security;
 
 import com.thaleswillreis.authapi.config.JwtProperties;
+import com.thaleswillreis.authapi.model.Permission;
+import com.thaleswillreis.authapi.model.Role;
 import com.thaleswillreis.authapi.model.Tenant;
 import com.thaleswillreis.authapi.model.User;
 import io.jsonwebtoken.Claims;
@@ -11,6 +13,8 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,7 +41,7 @@ class JwtServiceTest {
                 properties
         );
 
-        user = newUser(UUID.randomUUID(), UUID.randomUUID(), "joao@acme.com");
+        user = newUser(UUID.randomUUID(), "joao@acme.com");
     }
 
     @Test
@@ -64,19 +68,66 @@ class JwtServiceTest {
         assertThat(refreshClaims.getExpiration()).isAfter(accessClaims.getExpiration());
     }
 
-    private User newUser(UUID tenantId, UUID userId, String email) throws Exception {
+    @Test
+    @SuppressWarnings("unchecked")
+    void accessTokenIncludesPermissionsFromAssignedRoles() throws Exception {
+        Permission userWrite = newPermission(UUID.randomUUID(), "USER_WRITE");
+        Role adminRole = newRole(UUID.randomUUID(), "ADMIN", Set.of(userWrite));
+        user.addRole(adminRole);
+
+        String token = jwtService.generateAccessToken(user);
+        Claims claims = jwtService.parseToken(token);
+
+        List<String> permissions = claims.get("permissions", List.class);
+        assertThat(permissions).containsExactly("USER_WRITE");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void refreshTokenHasNoPermissions() throws Exception {
+        Permission userWrite = newPermission(UUID.randomUUID(), "USER_WRITE");
+        Role adminRole = newRole(UUID.randomUUID(), "ADMIN", Set.of(userWrite));
+        user.addRole(adminRole);
+
+        String token = jwtService.generateRefreshToken(user);
+        Claims claims = jwtService.parseToken(token);
+
+        List<String> permissions = claims.get("permissions", List.class);
+        assertThat(permissions).isEmpty();
+    }
+
+    private User newUser(UUID tenantId, String email) throws Exception {
         Tenant tenant = new Tenant("Acme Corp", "acme");
-        setId(Tenant.class, tenant, tenantId);
+        setField(Tenant.class, tenant, "id", tenantId);
 
         User user = new User(tenant, email, "hashed-password");
-        setId(User.class, user, userId);
+        setField(User.class, user, "id", UUID.randomUUID());
         return user;
     }
 
-    private void setId(Class<?> type, Object target, UUID id) throws Exception {
-        var idField = type.getDeclaredField("id");
-        idField.setAccessible(true);
-        idField.set(target, id);
+    private Permission newPermission(UUID id, String name) throws Exception {
+        var constructor = Permission.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        Permission permission = constructor.newInstance();
+        setField(Permission.class, permission, "id", id);
+        setField(Permission.class, permission, "name", name);
+        return permission;
+    }
+
+    private Role newRole(UUID id, String name, java.util.Set<Permission> permissions) throws Exception {
+        var constructor = Role.class.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        Role role = constructor.newInstance();
+        setField(Role.class, role, "id", id);
+        setField(Role.class, role, "name", name);
+        role.getPermissions().addAll(permissions);
+        return role;
+    }
+
+    private void setField(Class<?> type, Object target, String fieldName, Object value) throws Exception {
+        var field = type.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
     }
 
 }

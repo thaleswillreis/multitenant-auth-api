@@ -10,6 +10,7 @@ import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.Date;
+import java.util.Set;
 
 @Service
 public class JwtService {
@@ -26,12 +27,13 @@ public class JwtService {
 
     public String generateAccessToken(User user) {
         long expirationMillis = jwtProperties.getAccessTokenExpirationMinutes() * 60_000L;
-        return buildToken(user, "access", expirationMillis);
+        return buildToken(user, "access", expirationMillis, user.getPermissionNames());
     }
 
     public String generateRefreshToken(User user) {
         long expirationMillis = jwtProperties.getRefreshTokenExpirationDays() * 24 * 60 * 60_000L;
-        return buildToken(user, "refresh", expirationMillis);
+        // refresh token nao carrega permissoes - nao deve ser usado para autorizar acoes diretamente
+        return buildToken(user, "refresh", expirationMillis, Set.of());
     }
 
     public Claims parseToken(String token) {
@@ -42,7 +44,7 @@ public class JwtService {
                 .getPayload();
     }
 
-    private String buildToken(User user, String type, long expirationMillis) {
+    private String buildToken(User user, String type, long expirationMillis, Set<String> permissions) {
         Instant now = Instant.now();
 
         return Jwts.builder()
@@ -51,6 +53,7 @@ public class JwtService {
                 .claim("tenant_id", user.getTenant().getId().toString())
                 .claim("email", user.getEmail())
                 .claim("type", type)
+                .claim("permissions", permissions)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(expirationMillis)))
                 .signWith(privateKey, Jwts.SIG.RS256)
