@@ -48,7 +48,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return;
             }
 
-            UUID tenantId = UUID.fromString(claims.get("tenant_id", String.class));
+            String tenantIdClaim = claims.get("tenant_id", String.class);
+            if (tenantIdClaim == null) {
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token sem tenant_id valido");
+                return;
+            }
+
+            UUID tenantId = UUID.fromString(tenantIdClaim);
             String userId = claims.getSubject();
 
             TenantContext.setCurrentTenant(tenantId);
