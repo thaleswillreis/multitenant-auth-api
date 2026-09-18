@@ -3,6 +3,7 @@ package com.thaleswillreis.authapi.controller;
 import com.thaleswillreis.authapi.config.SecurityConfig;
 import com.thaleswillreis.authapi.dto.LoginResponse;
 import com.thaleswillreis.authapi.security.JwtService;
+import com.thaleswillreis.authapi.security.TokenBlacklistService;
 import com.thaleswillreis.authapi.service.AuthService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +30,9 @@ class AuthControllerTest {
 
         @MockBean
         private JwtService jwtService;
+
+        @MockBean
+        private TokenBlacklistService tokenBlacklistService;
 
         @Test
         void allowsLoginRequestWithoutAuthentication() throws Exception {

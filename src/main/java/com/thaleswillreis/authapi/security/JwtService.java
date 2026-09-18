@@ -11,6 +11,7 @@ import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 public class JwtService {
@@ -48,8 +49,9 @@ public class JwtService {
         Instant now = Instant.now();
 
         return Jwts.builder()
-                .issuer(jwtProperties.getIssuer())
-                .subject(user.getId().toString())
+        .id(UUID.randomUUID().toString())
+        .issuer(jwtProperties.getIssuer())
+        .subject(user.getId().toString())
                 .claim("tenant_id", user.getTenant().getId().toString())
                 .claim("email", user.getEmail())
                 .claim("type", type)

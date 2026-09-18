@@ -2,6 +2,7 @@ package com.thaleswillreis.authapi.config;
 
 import com.thaleswillreis.authapi.security.JwtAuthenticationFilter;
 import com.thaleswillreis.authapi.security.JwtService;
+import com.thaleswillreis.authapi.security.TokenBlacklistService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -20,8 +21,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
         @Bean
-        public SecurityFilterChain filterChain(HttpSecurity http, JwtService jwtService) throws Exception {
-                JwtAuthenticationFilter jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtService);
+        public SecurityFilterChain filterChain(HttpSecurity http, JwtService jwtService,
+                        TokenBlacklistService tokenBlacklistService) throws Exception {
+                JwtAuthenticationFilter jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtService,
+                                tokenBlacklistService);
 
                 http
                                 .csrf(AbstractHttpConfigurer::disable)
@@ -33,7 +36,7 @@ public class SecurityConfig {
                                                 .authenticationEntryPoint(
                                                                 new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                                 .authorizeHttpRequests(auth -> auth
-                                                .requestMatchers("/health", "/api/auth/**", "/error").permitAll()
+                                                .requestMatchers("/health", "/api/auth/login", "/error").permitAll()
                                                 .anyRequest().authenticated())
                                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

@@ -7,11 +7,13 @@ import com.thaleswillreis.authapi.model.Tenant;
 import com.thaleswillreis.authapi.model.User;
 import com.thaleswillreis.authapi.repository.UserRepository;
 import com.thaleswillreis.authapi.security.JwtService;
+import com.thaleswillreis.authapi.security.TokenBlacklistService;
 import com.thaleswillreis.authapi.tenant.TenantContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -22,15 +24,20 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
+
+    @Mock
+    private TokenBlacklistService tokenBlacklistService;
 
     @Mock
     private UserRepository userRepository;
@@ -54,10 +61,9 @@ class AuthServiceTest {
         jwtService = new JwtService(
                 (RSAPrivateKey) keyPair.getPrivate(),
                 (RSAPublicKey) keyPair.getPublic(),
-                properties
-        );
+                properties);
 
-        authService = new AuthService(userRepository, passwordEncoder, jwtService, properties);
+        authService = new AuthService(userRepository, passwordEncoder, jwtService, properties, tokenBlacklistService);
 
         tenantId = UUID.randomUUID();
         TenantContext.setCurrentTenant(tenantId);
@@ -133,6 +139,38 @@ class AuthServiceTest {
         var idField = type.getDeclaredField("id");
         idField.setAccessible(true);
         idField.set(target, id);
+    }
+
+    @Test
+    void logoutBlacklistsAccessTokenJti() throws Exception {
+        User user = newUser(tenantId, "joao@acme.com", "senha123", true);
+        String accessToken = jwtService.generateAccessToken(user);
+
+        authService.logout("Bearer " + accessToken);
+
+        ArgumentCaptor<String> jtiCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Instant> expirationCaptor = ArgumentCaptor.forClass(Instant.class);
+        verify(tokenBlacklistService).blacklist(jtiCaptor.capture(), expirationCaptor.capture());
+
+        assertThat(jtiCaptor.getValue()).isNotBlank();
+        assertThat(expirationCaptor.getValue()).isAfter(Instant.now());
+    }
+
+    @Test
+    void logoutRejectsRefreshToken() throws Exception {
+        User user = newUser(tenantId, "joao@acme.com", "senha123", true);
+        String refreshToken = jwtService.generateRefreshToken(user);
+
+        assertThatThrownBy(() -> authService.logout("Bearer " + refreshToken))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Apenas access tokens");
+    }
+
+    @Test
+    void logoutRejectsMissingAuthorizationHeader() {
+        assertThatThrownBy(() -> authService.logout(null))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Authorization ausente");
     }
 
 }

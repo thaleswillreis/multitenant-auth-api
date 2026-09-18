@@ -19,6 +19,7 @@ import org.springframework.boot.testcontainers.service.connection.ServiceConnect
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -40,6 +41,12 @@ class JwtAuthenticationFilterIT {
         @Container
         @ServiceConnection
         static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"));
+
+        @Container
+        @org.springframework.boot.testcontainers.service.connection.ServiceConnection(name = "redis")
+        static GenericContainer<?> redis =
+                new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+                        .withExposedPorts(6379);
 
         @Autowired
         private MockMvc mockMvc;
@@ -235,6 +242,30 @@ class JwtAuthenticationFilterIT {
 
                 mockMvc.perform(get("/api/users")
                                 .header("Authorization", "Bearer " + tokenWithoutTenant))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void logoutRevokesTokenAndSubsequentRequestsAreRejected() throws Exception {
+                Tenant tenant = tenantRepository.save(new Tenant("Acme Corp", "acme-logout-it"));
+                Role memberRole = roleRepository.findByName("MEMBER").orElseThrow();
+
+                User user = new User(tenant, "joao@acme-logout-it.com", passwordEncoder.encode("senha123"));
+                user.addRole(memberRole);
+                userRepository.save(user);
+
+                String accessToken = jwtService.generateAccessToken(user);
+
+                mockMvc.perform(get("/api/users")
+                                .header("Authorization", "Bearer " + accessToken))
+                                .andExpect(status().isOk());
+
+                mockMvc.perform(post("/api/auth/logout")
+                                .header("Authorization", "Bearer " + accessToken))
+                                .andExpect(status().isNoContent());
+
+                mockMvc.perform(get("/api/users")
+                                .header("Authorization", "Bearer " + accessToken))
                                 .andExpect(status().isUnauthorized());
         }
 

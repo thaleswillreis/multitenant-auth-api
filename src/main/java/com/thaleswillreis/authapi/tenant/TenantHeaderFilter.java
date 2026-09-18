@@ -20,7 +20,7 @@ public class TenantHeaderFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        if (!request.getRequestURI().startsWith("/api/auth/")) {
+        if (!request.getRequestURI().equals("/api/auth/login")) {
             filterChain.doFilter(request, response);
             return;
         }

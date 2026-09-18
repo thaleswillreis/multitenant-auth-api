@@ -21,15 +21,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtService jwtService;
+    private final TokenBlacklistService tokenBlacklistService;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(JwtService jwtService, TokenBlacklistService tokenBlacklistService) {
         this.jwtService = jwtService;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain) throws ServletException, IOException {
+                                     HttpServletResponse response,
+                                     FilterChain filterChain) throws ServletException, IOException {
 
         String authHeader = request.getHeader("Authorization");
 
@@ -45,6 +47,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (!"access".equals(claims.get("type"))) {
                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token nao e um access token valido");
+                return;
+            }
+
+            if (claims.getId() != null && tokenBlacklistService.isBlacklisted(claims.getId())) {
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token revogado");
                 return;
             }
 
