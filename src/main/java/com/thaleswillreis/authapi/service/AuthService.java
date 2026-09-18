@@ -3,6 +3,7 @@ package com.thaleswillreis.authapi.service;
 import com.thaleswillreis.authapi.config.JwtProperties;
 import com.thaleswillreis.authapi.dto.LoginRequest;
 import com.thaleswillreis.authapi.dto.LoginResponse;
+import com.thaleswillreis.authapi.dto.RefreshRequest;
 import com.thaleswillreis.authapi.model.User;
 import com.thaleswillreis.authapi.repository.UserRepository;
 import com.thaleswillreis.authapi.security.JwtService;
@@ -22,6 +23,7 @@ import java.util.UUID;
 public class AuthService {
 
     private static final String INVALID_CREDENTIALS_MESSAGE = "Credenciais invalidas";
+    private static final String INVALID_TOKEN_MESSAGE = "Token invalido ou expirado";
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final UserRepository userRepository;
@@ -56,11 +58,7 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE);
         }
 
-        String accessToken = jwtService.generateAccessToken(user);
-        String refreshToken = jwtService.generateRefreshToken(user);
-        long expiresInSeconds = jwtProperties.getAccessTokenExpirationMinutes() * 60;
-
-        return new LoginResponse(accessToken, refreshToken, "Bearer", expiresInSeconds);
+        return issueTokenPair(user);
     }
 
     public void logout(String authorizationHeader) {
@@ -69,19 +67,68 @@ public class AuthService {
         }
 
         String token = authorizationHeader.substring(BEARER_PREFIX.length());
-
-        Claims claims;
-        try {
-            claims = jwtService.parseToken(token);
-        } catch (JwtException ex) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token invalido ou expirado");
-        }
+        Claims claims = parseTokenOrThrow(token);
 
         if (!"access".equals(claims.get("type"))) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Apenas access tokens podem ser revogados");
         }
 
         tokenBlacklistService.blacklist(claims.getId(), claims.getExpiration().toInstant());
+    }
+
+    @Transactional(readOnly = true)
+    public LoginResponse refresh(RefreshRequest request) {
+        Claims claims = parseTokenOrThrow(request.getRefreshToken());
+
+        if (!"refresh".equals(claims.get("type"))) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token informado nao e um refresh token");
+        }
+
+        if (claims.getId() != null && tokenBlacklistService.isBlacklisted(claims.getId())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token revogado");
+        }
+
+        UUID tenantId;
+        UUID userId;
+        try {
+            tenantId = UUID.fromString(claims.get("tenant_id", String.class));
+            userId = UUID.fromString(claims.getSubject());
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_TOKEN_MESSAGE);
+        }
+
+        TenantContext.setCurrentTenant(tenantId);
+        try {
+            User user = userRepository.findById(userId)
+                    .filter(u -> u.getTenant().getId().equals(tenantId))
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE));
+
+            if (!user.isActive()) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE);
+            }
+
+            tokenBlacklistService.blacklist(claims.getId(), claims.getExpiration().toInstant());
+
+            return issueTokenPair(user);
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    private LoginResponse issueTokenPair(User user) {
+        String accessToken = jwtService.generateAccessToken(user);
+        String refreshToken = jwtService.generateRefreshToken(user);
+        long expiresInSeconds = jwtProperties.getAccessTokenExpirationMinutes() * 60;
+
+        return new LoginResponse(accessToken, refreshToken, "Bearer", expiresInSeconds);
+    }
+
+    private Claims parseTokenOrThrow(String token) {
+        try {
+            return jwtService.parseToken(token);
+        } catch (JwtException ex) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_TOKEN_MESSAGE);
+        }
     }
 
 }

@@ -44,8 +44,7 @@ class JwtAuthenticationFilterIT {
 
         @Container
         @org.springframework.boot.testcontainers.service.connection.ServiceConnection(name = "redis")
-        static GenericContainer<?> redis =
-                new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+        static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
                         .withExposedPorts(6379);
 
         @Autowired
@@ -266,6 +265,39 @@ class JwtAuthenticationFilterIT {
 
                 mockMvc.perform(get("/api/users")
                                 .header("Authorization", "Bearer " + accessToken))
+                                .andExpect(status().isUnauthorized());
+        }
+
+        @Test
+        void refreshRotatesTokensAndOldRefreshTokenBecomesUnusable() throws Exception {
+                Tenant tenant = tenantRepository.save(new Tenant("Acme Corp", "acme-refresh-it"));
+                Role memberRole = roleRepository.findByName("MEMBER").orElseThrow();
+
+                User user = new User(tenant, "joao@acme-refresh-it.com", passwordEncoder.encode("senha123"));
+                user.addRole(memberRole);
+                userRepository.save(user);
+
+                String oldRefreshToken = jwtService.generateRefreshToken(user);
+
+                String refreshPayload = "{\"refreshToken\":\"" + oldRefreshToken + "\"}";
+
+                String responseBody = mockMvc.perform(post("/api/auth/refresh")
+                                .contentType("application/json")
+                                .content(refreshPayload))
+                                .andExpect(status().isOk())
+                                .andReturn()
+                                .getResponse()
+                                .getContentAsString();
+
+                String newAccessToken = com.jayway.jsonpath.JsonPath.read(responseBody, "$.accessToken");
+
+                mockMvc.perform(get("/api/users")
+                                .header("Authorization", "Bearer " + newAccessToken))
+                                .andExpect(status().isOk());
+
+                mockMvc.perform(post("/api/auth/refresh")
+                                .contentType("application/json")
+                                .content(refreshPayload))
                                 .andExpect(status().isUnauthorized());
         }
 

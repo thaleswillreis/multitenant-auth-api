@@ -5,6 +5,7 @@ import com.thaleswillreis.authapi.dto.LoginRequest;
 import com.thaleswillreis.authapi.dto.LoginResponse;
 import com.thaleswillreis.authapi.model.Tenant;
 import com.thaleswillreis.authapi.model.User;
+import com.thaleswillreis.authapi.dto.RefreshRequest;
 import com.thaleswillreis.authapi.repository.UserRepository;
 import com.thaleswillreis.authapi.security.JwtService;
 import com.thaleswillreis.authapi.security.TokenBlacklistService;
@@ -30,6 +31,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -171,6 +173,68 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.logout(null))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Authorization ausente");
+    }
+
+    @Test
+    void refreshRotatesTokensAndBlacklistsOldRefreshToken() throws Exception {
+        User user = newUser(tenantId, "joao@acme.com", "senha123", true);
+        String oldRefreshToken = jwtService.generateRefreshToken(user);
+
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+
+        RefreshRequest request = new RefreshRequest();
+        request.setRefreshToken(oldRefreshToken);
+
+        LoginResponse response = authService.refresh(request);
+
+        assertThat(response.getAccessToken()).isNotBlank();
+        assertThat(response.getRefreshToken()).isNotBlank();
+        assertThat(response.getRefreshToken()).isNotEqualTo(oldRefreshToken);
+
+        verify(tokenBlacklistService).blacklist(any(), any());
+    }
+
+    @Test
+    void refreshRejectsAccessTokenAsInput() throws Exception {
+        User user = newUser(tenantId, "joao@acme.com", "senha123", true);
+        String accessToken = jwtService.generateAccessToken(user);
+
+        RefreshRequest request = new RefreshRequest();
+        request.setRefreshToken(accessToken);
+
+        assertThatThrownBy(() -> authService.refresh(request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("nao e um refresh token");
+    }
+
+    @Test
+    void refreshRejectsAlreadyBlacklistedToken() throws Exception {
+        User user = newUser(tenantId, "joao@acme.com", "senha123", true);
+        String refreshToken = jwtService.generateRefreshToken(user);
+
+        when(tokenBlacklistService.isBlacklisted(any())).thenReturn(true);
+
+        RefreshRequest request = new RefreshRequest();
+        request.setRefreshToken(refreshToken);
+
+        assertThatThrownBy(() -> authService.refresh(request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("revogado");
+    }
+
+    @Test
+    void refreshRejectsInactiveUser() throws Exception {
+        User user = newUser(tenantId, "joao@acme.com", "senha123", false);
+        String refreshToken = jwtService.generateRefreshToken(user);
+
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+
+        RefreshRequest request = new RefreshRequest();
+        request.setRefreshToken(refreshToken);
+
+        assertThatThrownBy(() -> authService.refresh(request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Credenciais invalidas");
     }
 
 }

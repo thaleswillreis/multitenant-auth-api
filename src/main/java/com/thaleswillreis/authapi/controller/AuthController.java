@@ -2,6 +2,7 @@ package com.thaleswillreis.authapi.controller;
 
 import com.thaleswillreis.authapi.dto.LoginRequest;
 import com.thaleswillreis.authapi.dto.LoginResponse;
+import com.thaleswillreis.authapi.dto.RefreshRequest;
 import com.thaleswillreis.authapi.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -31,6 +32,11 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout(@RequestHeader("Authorization") String authorizationHeader) {
         authService.logout(authorizationHeader);
+    }
+
+    @PostMapping("/refresh")
+    public LoginResponse refresh(@Valid @RequestBody RefreshRequest request) {
+        return authService.refresh(request);
     }
 
 }

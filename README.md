@@ -23,7 +23,7 @@ Em desenvolvimento — projeto de portfólio.
 - [x] **Fase 2 — Identidade e Cadastro de Usuários**
 - [x] **Fase 3 — Autenticação (JWT)**
 - [x] **Fase 4 — Autorização (RBAC)**
-- [ ] **Fase 5 — Gestão de Sessão e Revogação (Redis)**
+- [x] **Fase 5 — Gestão de Sessão e Revogação (Redis)**
 - [ ] **Fase 6 — OAuth2 para Aplicações Clientes**
 - [ ] **Fase 7 — Segurança Avançada**
 - [ ] **Fase 8 — Testes**
