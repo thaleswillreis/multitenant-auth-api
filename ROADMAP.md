@@ -42,7 +42,7 @@
 
 ## Fase 6 — OAuth2 para Aplicações Clientes
 
-- [ ] **Tarefa 6.1** — Modelagem de clientes (client_id/client_secret)
+- [x] **Tarefa 6.1** — Modelagem de clientes (client_id/client_secret)
 - [ ] **Tarefa 6.2** — Fluxo client credentials para microsserviços consumidores
 
 ## Fase 7 — Segurança Avançada
