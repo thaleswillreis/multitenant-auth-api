@@ -36,7 +36,7 @@
 
 ## Fase 5 — Gestão de Sessão e Revogação (Redis)
 
-- [ ] **Tarefa 5.1** — Integração com Redis
+- [x] **Tarefa 5.1** — Integração com Redis
 - [ ] **Tarefa 5.2** — Blacklist de tokens (logout efetivo)
 - [ ] **Tarefa 5.3** — Rotação de refresh token
 
