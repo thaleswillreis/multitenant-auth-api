@@ -22,8 +22,7 @@ class RoleRepositoryIT {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres =
-            new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"));
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"));
 
     @Autowired
     private RoleRepository roleRepository;
@@ -34,7 +33,9 @@ class RoleRepositoryIT {
 
         assertThat(admin).isPresent();
         assertThat(admin.get().getPermissions()).extracting("name")
-                .containsExactlyInAnyOrder("USER_READ", "USER_WRITE", "USER_DELETE");
+                .containsExactlyInAnyOrder(
+                        "USER_READ", "USER_WRITE", "USER_DELETE",
+                        "OAUTH_CLIENT_READ", "OAUTH_CLIENT_WRITE");
     }
 
     @Test

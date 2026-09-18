@@ -1,6 +1,7 @@
 package com.thaleswillreis.authapi.security;
 
 import com.thaleswillreis.authapi.config.JwtProperties;
+import com.thaleswillreis.authapi.model.OAuthClient;
 import com.thaleswillreis.authapi.model.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -33,7 +34,8 @@ public class JwtService {
 
     public String generateRefreshToken(User user) {
         long expirationMillis = jwtProperties.getRefreshTokenExpirationDays() * 24 * 60 * 60_000L;
-        // refresh token nao carrega permissoes - nao deve ser usado para autorizar acoes diretamente
+        // refresh token nao carrega permissoes - nao deve ser usado para autorizar
+        // acoes diretamente
         return buildToken(user, "refresh", expirationMillis, Set.of());
     }
 
@@ -49,13 +51,31 @@ public class JwtService {
         Instant now = Instant.now();
 
         return Jwts.builder()
-        .id(UUID.randomUUID().toString())
-        .issuer(jwtProperties.getIssuer())
-        .subject(user.getId().toString())
+                .id(UUID.randomUUID().toString())
+                .issuer(jwtProperties.getIssuer())
+                .subject(user.getId().toString())
                 .claim("tenant_id", user.getTenant().getId().toString())
                 .claim("email", user.getEmail())
                 .claim("type", type)
                 .claim("permissions", permissions)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusMillis(expirationMillis)))
+                .signWith(privateKey, Jwts.SIG.RS256)
+                .compact();
+    }
+
+    public String generateClientAccessToken(OAuthClient client) {
+        long expirationMillis = jwtProperties.getAccessTokenExpirationMinutes() * 60_000L;
+        Instant now = Instant.now();
+
+        return Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .issuer(jwtProperties.getIssuer())
+                .subject(client.getId().toString())
+                .claim("tenant_id", client.getTenant().getId().toString())
+                .claim("client_id", client.getClientId())
+                .claim("type", "client")
+                .claim("permissions", client.getPermissionNames())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(expirationMillis)))
                 .signWith(privateKey, Jwts.SIG.RS256)

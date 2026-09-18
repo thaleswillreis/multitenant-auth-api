@@ -1,10 +1,14 @@
 package com.thaleswillreis.authapi.service;
 
 import com.thaleswillreis.authapi.config.JwtProperties;
+import com.thaleswillreis.authapi.dto.ClientCredentialsRequest;
+import com.thaleswillreis.authapi.dto.ClientTokenResponse;
 import com.thaleswillreis.authapi.dto.LoginRequest;
 import com.thaleswillreis.authapi.dto.LoginResponse;
 import com.thaleswillreis.authapi.dto.RefreshRequest;
+import com.thaleswillreis.authapi.model.OAuthClient;
 import com.thaleswillreis.authapi.model.User;
+import com.thaleswillreis.authapi.repository.OAuthClientRepository;
 import com.thaleswillreis.authapi.repository.UserRepository;
 import com.thaleswillreis.authapi.security.JwtService;
 import com.thaleswillreis.authapi.security.TokenBlacklistService;
@@ -27,15 +31,17 @@ public class AuthService {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final UserRepository userRepository;
+    private final OAuthClientRepository oAuthClientRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
     private final TokenBlacklistService tokenBlacklistService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder,
-                        JwtService jwtService, JwtProperties jwtProperties,
+    public AuthService(UserRepository userRepository, OAuthClientRepository oAuthClientRepository,
+                        PasswordEncoder passwordEncoder, JwtService jwtService, JwtProperties jwtProperties,
                         TokenBlacklistService tokenBlacklistService) {
         this.userRepository = userRepository;
+        this.oAuthClientRepository = oAuthClientRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.jwtProperties = jwtProperties;
@@ -113,6 +119,23 @@ public class AuthService {
         } finally {
             TenantContext.clear();
         }
+    }
+
+    @Transactional(readOnly = true)
+    public ClientTokenResponse clientCredentials(ClientCredentialsRequest request) {
+        OAuthClient client = oAuthClientRepository.findByClientId(request.getClientId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE));
+
+        boolean secretMatches = passwordEncoder.matches(request.getClientSecret(), client.getClientSecretHash());
+
+        if (!client.isActive() || !secretMatches) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE);
+        }
+
+        String accessToken = jwtService.generateClientAccessToken(client);
+        long expiresInSeconds = jwtProperties.getAccessTokenExpirationMinutes() * 60;
+
+        return new ClientTokenResponse(accessToken, "Bearer", expiresInSeconds);
     }
 
     private LoginResponse issueTokenPair(User user) {

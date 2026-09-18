@@ -30,8 +30,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                     HttpServletResponse response,
-                                     FilterChain filterChain) throws ServletException, IOException {
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
 
         String authHeader = request.getHeader("Authorization");
 
@@ -45,7 +45,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             Claims claims = jwtService.parseToken(token);
 
-            if (!"access".equals(claims.get("type"))) {
+            String tokenType = claims.get("type", String.class);
+            if (!"access".equals(tokenType) && !"client".equals(tokenType)) {
                 response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token nao e um access token valido");
                 return;
             }

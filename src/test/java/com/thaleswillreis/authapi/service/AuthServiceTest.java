@@ -1,11 +1,14 @@
 package com.thaleswillreis.authapi.service;
 
 import com.thaleswillreis.authapi.config.JwtProperties;
+import com.thaleswillreis.authapi.dto.ClientCredentialsRequest;
 import com.thaleswillreis.authapi.dto.LoginRequest;
 import com.thaleswillreis.authapi.dto.LoginResponse;
+import com.thaleswillreis.authapi.model.OAuthClient;
 import com.thaleswillreis.authapi.model.Tenant;
 import com.thaleswillreis.authapi.model.User;
 import com.thaleswillreis.authapi.dto.RefreshRequest;
+import com.thaleswillreis.authapi.repository.OAuthClientRepository;
 import com.thaleswillreis.authapi.repository.UserRepository;
 import com.thaleswillreis.authapi.security.JwtService;
 import com.thaleswillreis.authapi.security.TokenBlacklistService;
@@ -39,6 +42,9 @@ import static org.mockito.Mockito.when;
 class AuthServiceTest {
 
     @Mock
+    private OAuthClientRepository oAuthClientRepository;
+
+    @Mock
     private TokenBlacklistService tokenBlacklistService;
 
     @Mock
@@ -65,7 +71,8 @@ class AuthServiceTest {
                 (RSAPublicKey) keyPair.getPublic(),
                 properties);
 
-        authService = new AuthService(userRepository, passwordEncoder, jwtService, properties, tokenBlacklistService);
+        authService = new AuthService(userRepository, oAuthClientRepository, passwordEncoder, jwtService, properties,
+                tokenBlacklistService);
 
         tenantId = UUID.randomUUID();
         TenantContext.setCurrentTenant(tenantId);
@@ -236,5 +243,58 @@ class AuthServiceTest {
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Credenciais invalidas");
     }
+
+    @Test
+    void clientCredentialsSucceedsWithValidSecret() throws Exception {
+        OAuthClient client = newOAuthClient(tenantId, "billing-service", "correct-secret");
+
+        when(oAuthClientRepository.findByClientId("billing-service")).thenReturn(Optional.of(client));
+
+        ClientCredentialsRequest request = new ClientCredentialsRequest();
+        request.setClientId("billing-service");
+        request.setClientSecret("correct-secret");
+
+        var response = authService.clientCredentials(request);
+
+        assertThat(response.getAccessToken()).isNotBlank();
+        assertThat(response.getTokenType()).isEqualTo("Bearer");
+    }
+
+    @Test
+    void clientCredentialsFailsWithWrongSecret() throws Exception {
+        OAuthClient client = newOAuthClient(tenantId, "billing-service", "correct-secret");
+
+        when(oAuthClientRepository.findByClientId("billing-service")).thenReturn(Optional.of(client));
+
+        ClientCredentialsRequest request = new ClientCredentialsRequest();
+        request.setClientId("billing-service");
+        request.setClientSecret("wrong-secret");
+
+        assertThatThrownBy(() -> authService.clientCredentials(request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Credenciais invalidas");
+    }
+
+    @Test
+    void clientCredentialsFailsWhenClientNotFound() {
+        when(oAuthClientRepository.findByClientId("nao-existe")).thenReturn(Optional.empty());
+
+        ClientCredentialsRequest request = new ClientCredentialsRequest();
+        request.setClientId("nao-existe");
+        request.setClientSecret("qualquer-coisa");
+
+        assertThatThrownBy(() -> authService.clientCredentials(request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Credenciais invalidas");
+    }
+
+    private OAuthClient newOAuthClient(UUID tenantId, String clientId, String rawSecret) throws Exception {
+    Tenant tenant = new Tenant("Acme Corp", "acme");
+    setId(Tenant.class, tenant, tenantId);
+
+    OAuthClient client = new OAuthClient(tenant, "Test Client", clientId, passwordEncoder.encode(rawSecret));
+    setId(OAuthClient.class, client, UUID.randomUUID());
+    return client;
+}
 
 }

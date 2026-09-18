@@ -1,5 +1,7 @@
 package com.thaleswillreis.authapi.controller;
 
+import com.thaleswillreis.authapi.dto.ClientCredentialsRequest;
+import com.thaleswillreis.authapi.dto.ClientTokenResponse;
 import com.thaleswillreis.authapi.dto.LoginRequest;
 import com.thaleswillreis.authapi.dto.LoginResponse;
 import com.thaleswillreis.authapi.dto.RefreshRequest;
@@ -37,6 +39,11 @@ public class AuthController {
     @PostMapping("/refresh")
     public LoginResponse refresh(@Valid @RequestBody RefreshRequest request) {
         return authService.refresh(request);
+    }
+
+    @PostMapping("/token")
+    public ClientTokenResponse clientCredentialsToken(@Valid @RequestBody ClientCredentialsRequest request) {
+        return authService.clientCredentials(request);
     }
 
 }
