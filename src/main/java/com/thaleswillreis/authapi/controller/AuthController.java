@@ -6,6 +6,8 @@ import com.thaleswillreis.authapi.dto.LoginRequest;
 import com.thaleswillreis.authapi.dto.LoginResponse;
 import com.thaleswillreis.authapi.dto.RefreshRequest;
 import com.thaleswillreis.authapi.service.AuthService;
+import com.thaleswillreis.authapi.util.ClientIpResolver;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,24 +28,25 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
-        return authService.login(request);
+    public LoginResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+        return authService.login(request, ClientIpResolver.resolve(httpRequest));
     }
 
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void logout(@RequestHeader("Authorization") String authorizationHeader) {
-        authService.logout(authorizationHeader);
+    public void logout(@RequestHeader("Authorization") String authorizationHeader, HttpServletRequest httpRequest) {
+        authService.logout(authorizationHeader, ClientIpResolver.resolve(httpRequest));
     }
 
     @PostMapping("/refresh")
-    public LoginResponse refresh(@Valid @RequestBody RefreshRequest request) {
-        return authService.refresh(request);
+    public LoginResponse refresh(@Valid @RequestBody RefreshRequest request, HttpServletRequest httpRequest) {
+        return authService.refresh(request, ClientIpResolver.resolve(httpRequest));
     }
 
     @PostMapping("/token")
-    public ClientTokenResponse clientCredentialsToken(@Valid @RequestBody ClientCredentialsRequest request) {
-        return authService.clientCredentials(request);
+    public ClientTokenResponse clientCredentialsToken(@Valid @RequestBody ClientCredentialsRequest request,
+            HttpServletRequest httpRequest) {
+        return authService.clientCredentials(request, ClientIpResolver.resolve(httpRequest));
     }
 
 }

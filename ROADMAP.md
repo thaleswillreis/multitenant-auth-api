@@ -49,7 +49,7 @@
 
 - [x] **Tarefa 7.1** — Rate limiting
 - [x] **Tarefa 7.2** — Proteção contra brute force
-- [ ] **Tarefa 7.3** — Auditoria de eventos de segurança (login, falha de login, troca de senha)
+- [x] **Tarefa 7.3** — Auditoria de eventos de segurança (login, falha de login, troca de senha)
 - [ ] **Tarefa 7.4** — MFA (extensão opcional)
 
 ## Fase 8 — Testes

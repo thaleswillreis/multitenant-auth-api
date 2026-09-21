@@ -7,11 +7,13 @@ import com.thaleswillreis.authapi.dto.LoginRequest;
 import com.thaleswillreis.authapi.dto.LoginResponse;
 import com.thaleswillreis.authapi.dto.RefreshRequest;
 import com.thaleswillreis.authapi.model.OAuthClient;
+import com.thaleswillreis.authapi.model.SecurityEventType;
 import com.thaleswillreis.authapi.model.User;
 import com.thaleswillreis.authapi.repository.OAuthClientRepository;
 import com.thaleswillreis.authapi.repository.UserRepository;
 import com.thaleswillreis.authapi.security.JwtService;
 import com.thaleswillreis.authapi.security.LoginAttemptService;
+import com.thaleswillreis.authapi.security.SecurityAuditService;
 import com.thaleswillreis.authapi.security.TokenBlacklistService;
 import com.thaleswillreis.authapi.tenant.TenantContext;
 import io.jsonwebtoken.Claims;
@@ -38,10 +40,12 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final TokenBlacklistService tokenBlacklistService;
     private final LoginAttemptService loginAttemptService;
+    private final SecurityAuditService securityAuditService;
 
     public AuthService(UserRepository userRepository, OAuthClientRepository oAuthClientRepository,
             PasswordEncoder passwordEncoder, JwtService jwtService, JwtProperties jwtProperties,
-            TokenBlacklistService tokenBlacklistService, LoginAttemptService loginAttemptService) {
+            TokenBlacklistService tokenBlacklistService, LoginAttemptService loginAttemptService,
+            SecurityAuditService securityAuditService) {
         this.userRepository = userRepository;
         this.oAuthClientRepository = oAuthClientRepository;
         this.passwordEncoder = passwordEncoder;
@@ -49,35 +53,41 @@ public class AuthService {
         this.jwtProperties = jwtProperties;
         this.tokenBlacklistService = tokenBlacklistService;
         this.loginAttemptService = loginAttemptService;
+        this.securityAuditService = securityAuditService;
     }
 
     @Transactional(readOnly = true)
-    public LoginResponse login(LoginRequest request) {
+    public LoginResponse login(LoginRequest request, String clientIp) {
         UUID tenantId = TenantContext.getCurrentTenant();
         if (tenantId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tenant nao informado");
         }
 
         if (loginAttemptService.isLocked(tenantId, request.getEmail())) {
+            securityAuditService.record(tenantId, SecurityEventType.ACCOUNT_LOCKED, request.getEmail(), false,
+                    clientIp);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE);
         }
 
         User user = userRepository.findByTenantIdAndEmail(tenantId, request.getEmail())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE));
+                .orElse(null);
 
-        boolean passwordMatches = passwordEncoder.matches(request.getPassword(), user.getPasswordHash());
+        boolean passwordMatches = user != null
+                && passwordEncoder.matches(request.getPassword(), user.getPasswordHash());
 
-        if (!user.isActive() || !passwordMatches) {
+        if (user == null || !user.isActive() || !passwordMatches) {
             loginAttemptService.recordFailure(tenantId, request.getEmail());
+            securityAuditService.record(tenantId, SecurityEventType.LOGIN_FAILURE, request.getEmail(), false, clientIp);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE);
         }
 
         loginAttemptService.recordSuccess(tenantId, request.getEmail());
+        securityAuditService.record(tenantId, SecurityEventType.LOGIN_SUCCESS, request.getEmail(), true, clientIp);
 
         return issueTokenPair(user);
     }
 
-    public void logout(String authorizationHeader) {
+    public void logout(String authorizationHeader, String clientIp) {
         if (authorizationHeader == null || !authorizationHeader.startsWith(BEARER_PREFIX)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Header Authorization ausente ou invalido");
         }
@@ -90,10 +100,14 @@ public class AuthService {
         }
 
         tokenBlacklistService.blacklist(claims.getId(), claims.getExpiration().toInstant());
+
+        UUID tenantId = parseTenantIdOrNull(claims);
+        securityAuditService.record(tenantId, SecurityEventType.LOGOUT, claims.get("email", String.class), true,
+                clientIp);
     }
 
     @Transactional(readOnly = true)
-    public LoginResponse refresh(RefreshRequest request) {
+    public LoginResponse refresh(RefreshRequest request, String clientIp) {
         Claims claims = parseTokenOrThrow(request.getRefreshToken());
 
         if (!"refresh".equals(claims.get("type"))) {
@@ -101,6 +115,8 @@ public class AuthService {
         }
 
         if (claims.getId() != null && tokenBlacklistService.isBlacklisted(claims.getId())) {
+            securityAuditService.record(parseTenantIdOrNull(claims), SecurityEventType.TOKEN_REFRESH_FAILURE,
+                    claims.get("email", String.class), false, clientIp);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh token revogado");
         }
 
@@ -117,14 +133,17 @@ public class AuthService {
         try {
             User user = userRepository.findById(userId)
                     .filter(u -> u.getTenant().getId().equals(tenantId))
-                    .orElseThrow(
-                            () -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE));
+                    .orElse(null);
 
-            if (!user.isActive()) {
+            if (user == null || !user.isActive()) {
+                securityAuditService.record(tenantId, SecurityEventType.TOKEN_REFRESH_FAILURE,
+                        claims.get("email", String.class), false, clientIp);
                 throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE);
             }
 
             tokenBlacklistService.blacklist(claims.getId(), claims.getExpiration().toInstant());
+            securityAuditService.record(tenantId, SecurityEventType.TOKEN_REFRESH_SUCCESS, user.getEmail(), true,
+                    clientIp);
 
             return issueTokenPair(user);
         } finally {
@@ -133,18 +152,25 @@ public class AuthService {
     }
 
     @Transactional(readOnly = true)
-    public ClientTokenResponse clientCredentials(ClientCredentialsRequest request) {
+    public ClientTokenResponse clientCredentials(ClientCredentialsRequest request, String clientIp) {
         OAuthClient client = oAuthClientRepository.findByClientId(request.getClientId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE));
+                .orElse(null);
 
-        boolean secretMatches = passwordEncoder.matches(request.getClientSecret(), client.getClientSecretHash());
+        boolean secretMatches = client != null
+                && passwordEncoder.matches(request.getClientSecret(), client.getClientSecretHash());
 
-        if (!client.isActive() || !secretMatches) {
+        if (client == null || !client.isActive() || !secretMatches) {
+            UUID tenantId = client != null ? client.getTenant().getId() : null;
+            securityAuditService.record(tenantId, SecurityEventType.CLIENT_CREDENTIALS_FAILURE, request.getClientId(),
+                    false, clientIp);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE);
         }
 
         String accessToken = jwtService.generateClientAccessToken(client);
         long expiresInSeconds = jwtProperties.getAccessTokenExpirationMinutes() * 60;
+
+        securityAuditService.record(client.getTenant().getId(), SecurityEventType.CLIENT_CREDENTIALS_SUCCESS,
+                client.getClientId(), true, clientIp);
 
         return new ClientTokenResponse(accessToken, "Bearer", expiresInSeconds);
     }
@@ -162,6 +188,14 @@ public class AuthService {
             return jwtService.parseToken(token);
         } catch (JwtException ex) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_TOKEN_MESSAGE);
+        }
+    }
+
+    private UUID parseTenantIdOrNull(Claims claims) {
+        try {
+            return UUID.fromString(claims.get("tenant_id", String.class));
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            return null;
         }
     }
 

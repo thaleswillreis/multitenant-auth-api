@@ -12,6 +12,7 @@ import com.thaleswillreis.authapi.repository.OAuthClientRepository;
 import com.thaleswillreis.authapi.repository.UserRepository;
 import com.thaleswillreis.authapi.security.LoginAttemptService;
 import com.thaleswillreis.authapi.security.JwtService;
+import com.thaleswillreis.authapi.security.SecurityAuditService;
 import com.thaleswillreis.authapi.security.TokenBlacklistService;
 import com.thaleswillreis.authapi.tenant.TenantContext;
 import org.junit.jupiter.api.AfterEach;
@@ -43,6 +44,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
+    private static final String TEST_IP = "127.0.0.1";
+
     @Mock
     private OAuthClientRepository oAuthClientRepository;
 
@@ -51,6 +54,9 @@ class AuthServiceTest {
 
     @Mock
     private LoginAttemptService loginAttemptService;
+
+    @Mock
+    private SecurityAuditService securityAuditService;
 
     @Mock
     private UserRepository userRepository;
@@ -77,7 +83,7 @@ class AuthServiceTest {
                 properties);
 
         authService = new AuthService(userRepository, oAuthClientRepository, passwordEncoder, jwtService, properties,
-                tokenBlacklistService, loginAttemptService);
+                tokenBlacklistService, loginAttemptService, securityAuditService);
 
         tenantId = UUID.randomUUID();
         TenantContext.setCurrentTenant(tenantId);
@@ -95,7 +101,7 @@ class AuthServiceTest {
         when(userRepository.findByTenantIdAndEmail(tenantId, "joao@acme.com")).thenReturn(Optional.of(user));
         when(loginAttemptService.isLocked(tenantId, "joao@acme.com")).thenReturn(false);
 
-        LoginResponse response = authService.login(loginRequest("joao@acme.com", "correct-password"));
+        LoginResponse response = authService.login(loginRequest("joao@acme.com", "correct-password"), TEST_IP);
 
         assertThat(response.getAccessToken()).isNotBlank();
         assertThat(response.getRefreshToken()).isNotBlank();
@@ -109,7 +115,7 @@ class AuthServiceTest {
         when(userRepository.findByTenantIdAndEmail(tenantId, "joao@acme.com")).thenReturn(Optional.of(user));
         when(loginAttemptService.isLocked(tenantId, "joao@acme.com")).thenReturn(false);
 
-        assertThatThrownBy(() -> authService.login(loginRequest("joao@acme.com", "wrong-password")))
+        assertThatThrownBy(() -> authService.login(loginRequest("joao@acme.com", "wrong-password"), TEST_IP))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Credenciais invalidas");
     }
@@ -117,8 +123,9 @@ class AuthServiceTest {
     @Test
     void loginFailsWhenUserDoesNotExist() {
         when(userRepository.findByTenantIdAndEmail(tenantId, "ninguem@acme.com")).thenReturn(Optional.empty());
+        when(loginAttemptService.isLocked(tenantId, "ninguem@acme.com")).thenReturn(false);
 
-        assertThatThrownBy(() -> authService.login(loginRequest("ninguem@acme.com", "qualquer-senha")))
+        assertThatThrownBy(() -> authService.login(loginRequest("ninguem@acme.com", "qualquer-senha"), TEST_IP))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Credenciais invalidas");
     }
@@ -128,8 +135,9 @@ class AuthServiceTest {
         User user = newUser(tenantId, "joao@acme.com", "correct-password", false);
 
         when(userRepository.findByTenantIdAndEmail(tenantId, "joao@acme.com")).thenReturn(Optional.of(user));
+        when(loginAttemptService.isLocked(tenantId, "joao@acme.com")).thenReturn(false);
 
-        assertThatThrownBy(() -> authService.login(loginRequest("joao@acme.com", "correct-password")))
+        assertThatThrownBy(() -> authService.login(loginRequest("joao@acme.com", "correct-password"), TEST_IP))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Credenciais invalidas");
     }
@@ -162,7 +170,7 @@ class AuthServiceTest {
         User user = newUser(tenantId, "joao@acme.com", "senha123", true);
         String accessToken = jwtService.generateAccessToken(user);
 
-        authService.logout("Bearer " + accessToken);
+        authService.logout("Bearer " + accessToken, TEST_IP);
 
         ArgumentCaptor<String> jtiCaptor = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<Instant> expirationCaptor = ArgumentCaptor.forClass(Instant.class);
@@ -177,14 +185,14 @@ class AuthServiceTest {
         User user = newUser(tenantId, "joao@acme.com", "senha123", true);
         String refreshToken = jwtService.generateRefreshToken(user);
 
-        assertThatThrownBy(() -> authService.logout("Bearer " + refreshToken))
+        assertThatThrownBy(() -> authService.logout("Bearer " + refreshToken, TEST_IP))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Apenas access tokens");
     }
 
     @Test
     void logoutRejectsMissingAuthorizationHeader() {
-        assertThatThrownBy(() -> authService.logout(null))
+        assertThatThrownBy(() -> authService.logout(null, TEST_IP))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Authorization ausente");
     }
@@ -199,7 +207,7 @@ class AuthServiceTest {
         RefreshRequest request = new RefreshRequest();
         request.setRefreshToken(oldRefreshToken);
 
-        LoginResponse response = authService.refresh(request);
+        LoginResponse response = authService.refresh(request, TEST_IP);
 
         assertThat(response.getAccessToken()).isNotBlank();
         assertThat(response.getRefreshToken()).isNotBlank();
@@ -216,7 +224,7 @@ class AuthServiceTest {
         RefreshRequest request = new RefreshRequest();
         request.setRefreshToken(accessToken);
 
-        assertThatThrownBy(() -> authService.refresh(request))
+        assertThatThrownBy(() -> authService.refresh(request, TEST_IP))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("nao e um refresh token");
     }
@@ -231,7 +239,7 @@ class AuthServiceTest {
         RefreshRequest request = new RefreshRequest();
         request.setRefreshToken(refreshToken);
 
-        assertThatThrownBy(() -> authService.refresh(request))
+        assertThatThrownBy(() -> authService.refresh(request, TEST_IP))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("revogado");
     }
@@ -246,7 +254,7 @@ class AuthServiceTest {
         RefreshRequest request = new RefreshRequest();
         request.setRefreshToken(refreshToken);
 
-        assertThatThrownBy(() -> authService.refresh(request))
+        assertThatThrownBy(() -> authService.refresh(request, TEST_IP))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Credenciais invalidas");
     }
@@ -261,7 +269,7 @@ class AuthServiceTest {
         request.setClientId("billing-service");
         request.setClientSecret("correct-secret");
 
-        var response = authService.clientCredentials(request);
+        var response = authService.clientCredentials(request, TEST_IP);
 
         assertThat(response.getAccessToken()).isNotBlank();
         assertThat(response.getTokenType()).isEqualTo("Bearer");
@@ -277,7 +285,7 @@ class AuthServiceTest {
         request.setClientId("billing-service");
         request.setClientSecret("wrong-secret");
 
-        assertThatThrownBy(() -> authService.clientCredentials(request))
+        assertThatThrownBy(() -> authService.clientCredentials(request, TEST_IP))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Credenciais invalidas");
     }
@@ -290,7 +298,7 @@ class AuthServiceTest {
         request.setClientId("nao-existe");
         request.setClientSecret("qualquer-coisa");
 
-        assertThatThrownBy(() -> authService.clientCredentials(request))
+        assertThatThrownBy(() -> authService.clientCredentials(request, TEST_IP))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Credenciais invalidas");
     }
@@ -308,7 +316,7 @@ class AuthServiceTest {
     void loginFailsImmediatelyWhenAccountIsLocked() {
         when(loginAttemptService.isLocked(tenantId, "joao@acme.com")).thenReturn(true);
 
-        assertThatThrownBy(() -> authService.login(loginRequest("joao@acme.com", "qualquer-senha")))
+        assertThatThrownBy(() -> authService.login(loginRequest("joao@acme.com", "qualquer-senha"), TEST_IP))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Credenciais invalidas");
 
@@ -322,7 +330,7 @@ class AuthServiceTest {
         when(loginAttemptService.isLocked(tenantId, "joao@acme.com")).thenReturn(false);
         when(userRepository.findByTenantIdAndEmail(tenantId, "joao@acme.com")).thenReturn(Optional.of(user));
 
-        assertThatThrownBy(() -> authService.login(loginRequest("joao@acme.com", "wrong-password")))
+        assertThatThrownBy(() -> authService.login(loginRequest("joao@acme.com", "wrong-password"), TEST_IP))
                 .isInstanceOf(ResponseStatusException.class);
 
         verify(loginAttemptService).recordFailure(tenantId, "joao@acme.com");
@@ -335,7 +343,7 @@ class AuthServiceTest {
         when(loginAttemptService.isLocked(tenantId, "joao@acme.com")).thenReturn(false);
         when(userRepository.findByTenantIdAndEmail(tenantId, "joao@acme.com")).thenReturn(Optional.of(user));
 
-        authService.login(loginRequest("joao@acme.com", "correct-password"));
+        authService.login(loginRequest("joao@acme.com", "correct-password"), TEST_IP);
 
         verify(loginAttemptService).recordSuccess(tenantId, "joao@acme.com");
     }

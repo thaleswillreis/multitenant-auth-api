@@ -3,6 +3,8 @@ package com.thaleswillreis.authapi.controller;
 import com.thaleswillreis.authapi.dto.CreateOAuthClientRequest;
 import com.thaleswillreis.authapi.dto.CreateOAuthClientResponse;
 import com.thaleswillreis.authapi.service.OAuthClientService;
+import com.thaleswillreis.authapi.util.ClientIpResolver;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,8 +27,8 @@ public class OAuthClientController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('OAUTH_CLIENT_WRITE')")
-    public CreateOAuthClientResponse create(@Valid @RequestBody CreateOAuthClientRequest request) {
-        return oAuthClientService.create(request);
+    public CreateOAuthClientResponse create(@Valid @RequestBody CreateOAuthClientRequest request, HttpServletRequest httpRequest) {
+        return oAuthClientService.create(request, ClientIpResolver.resolve(httpRequest));
     }
 
 }

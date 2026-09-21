@@ -4,10 +4,12 @@ import com.thaleswillreis.authapi.dto.CreateOAuthClientRequest;
 import com.thaleswillreis.authapi.dto.CreateOAuthClientResponse;
 import com.thaleswillreis.authapi.model.OAuthClient;
 import com.thaleswillreis.authapi.model.Permission;
+import com.thaleswillreis.authapi.model.SecurityEventType;
 import com.thaleswillreis.authapi.model.Tenant;
 import com.thaleswillreis.authapi.repository.OAuthClientRepository;
 import com.thaleswillreis.authapi.repository.PermissionRepository;
 import com.thaleswillreis.authapi.repository.TenantRepository;
+import com.thaleswillreis.authapi.security.SecurityAuditService;
 import com.thaleswillreis.authapi.tenant.TenantContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -27,17 +29,20 @@ public class OAuthClientService {
     private final TenantRepository tenantRepository;
     private final PermissionRepository permissionRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SecurityAuditService securityAuditService;
 
     public OAuthClientService(OAuthClientRepository oAuthClientRepository, TenantRepository tenantRepository,
-                               PermissionRepository permissionRepository, PasswordEncoder passwordEncoder) {
+            PermissionRepository permissionRepository, PasswordEncoder passwordEncoder,
+            SecurityAuditService securityAuditService) {
         this.oAuthClientRepository = oAuthClientRepository;
         this.tenantRepository = tenantRepository;
         this.permissionRepository = permissionRepository;
         this.passwordEncoder = passwordEncoder;
+        this.securityAuditService = securityAuditService;
     }
 
     @Transactional
-    public CreateOAuthClientResponse create(CreateOAuthClientRequest request) {
+    public CreateOAuthClientResponse create(CreateOAuthClientRequest request, String clientIp) {
         UUID tenantId = TenantContext.getCurrentTenant();
         if (tenantId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tenant nao informado");
@@ -55,13 +60,17 @@ public class OAuthClientService {
         Set<String> requestedPermissions = request.getPermissions() == null ? Set.of() : request.getPermissions();
         for (String permissionName : requestedPermissions) {
             Permission permission = permissionRepository.findByName(permissionName)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Permissao invalida: " + permissionName));
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Permissao invalida: " + permissionName));
             client.addPermission(permission);
         }
 
         oAuthClientRepository.save(client);
 
-        return new CreateOAuthClientResponse(client.getClientId(), rawSecret, client.getName(), client.getPermissionNames());
+        securityAuditService.record(tenantId, SecurityEventType.OAUTH_CLIENT_CREATED, clientId, true, clientIp);
+
+        return new CreateOAuthClientResponse(client.getClientId(), rawSecret, client.getName(),
+                client.getPermissionNames());
     }
 
     private String generateSecret() {

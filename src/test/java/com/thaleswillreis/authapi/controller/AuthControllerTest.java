@@ -36,7 +36,7 @@ class AuthControllerTest {
 
         @Test
         void allowsLoginRequestWithoutAuthentication() throws Exception {
-                when(authService.login(any()))
+                when(authService.login(any(), any()))
                                 .thenReturn(new LoginResponse("access-token", "refresh-token", "Bearer", 900L));
 
                 String payload = """

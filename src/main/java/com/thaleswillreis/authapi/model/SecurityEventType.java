@@ -1,0 +1,13 @@
+package com.thaleswillreis.authapi.model;
+
+public enum SecurityEventType {
+    LOGIN_SUCCESS,
+    LOGIN_FAILURE,
+    ACCOUNT_LOCKED,
+    LOGOUT,
+    TOKEN_REFRESH_SUCCESS,
+    TOKEN_REFRESH_FAILURE,
+    CLIENT_CREDENTIALS_SUCCESS,
+    CLIENT_CREDENTIALS_FAILURE,
+    OAUTH_CLIENT_CREATED
+}

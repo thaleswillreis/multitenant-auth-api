@@ -1,6 +1,7 @@
 package com.thaleswillreis.authapi.ratelimit;
 
 import com.thaleswillreis.authapi.config.RateLimitProperties;
+import com.thaleswillreis.authapi.util.ClientIpResolver;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.BucketConfiguration;
@@ -42,7 +43,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         long waitSeconds = 0;
 
         try {
-            String clientIp = resolveClientIp(request);
+            String clientIp = ClientIpResolver.resolve(request);
             Bucket bucket = proxyManager.getProxy("rate-limit:" + clientIp, this::bucketConfiguration);
             ConsumptionProbe probe = bucket.tryConsumeAndReturnRemaining(1);
 
@@ -78,14 +79,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
                                 Duration.ofSeconds(rateLimitProperties.getRefillDurationSeconds()))
                         .build())
                 .build();
-    }
-
-    private String resolveClientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 
 }
