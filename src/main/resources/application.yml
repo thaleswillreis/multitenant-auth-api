@@ -18,11 +18,14 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
 
-server:
-  port: 8080
-
 app:
   jwt:
     issuer: multitenant-auth-api
     access-token-expiration-minutes: 15
     refresh-token-expiration-days: 7
+  rate-limit:
+    capacity: 100
+    refill-duration-seconds: 60
+
+server:
+  port: 8080
