@@ -11,6 +11,7 @@ import com.thaleswillreis.authapi.model.User;
 import com.thaleswillreis.authapi.repository.OAuthClientRepository;
 import com.thaleswillreis.authapi.repository.UserRepository;
 import com.thaleswillreis.authapi.security.JwtService;
+import com.thaleswillreis.authapi.security.LoginAttemptService;
 import com.thaleswillreis.authapi.security.TokenBlacklistService;
 import com.thaleswillreis.authapi.tenant.TenantContext;
 import io.jsonwebtoken.Claims;
@@ -36,16 +37,18 @@ public class AuthService {
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
     private final TokenBlacklistService tokenBlacklistService;
+    private final LoginAttemptService loginAttemptService;
 
     public AuthService(UserRepository userRepository, OAuthClientRepository oAuthClientRepository,
-                        PasswordEncoder passwordEncoder, JwtService jwtService, JwtProperties jwtProperties,
-                        TokenBlacklistService tokenBlacklistService) {
+            PasswordEncoder passwordEncoder, JwtService jwtService, JwtProperties jwtProperties,
+            TokenBlacklistService tokenBlacklistService, LoginAttemptService loginAttemptService) {
         this.userRepository = userRepository;
         this.oAuthClientRepository = oAuthClientRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.jwtProperties = jwtProperties;
         this.tokenBlacklistService = tokenBlacklistService;
+        this.loginAttemptService = loginAttemptService;
     }
 
     @Transactional(readOnly = true)
@@ -55,14 +58,21 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tenant nao informado");
         }
 
+        if (loginAttemptService.isLocked(tenantId, request.getEmail())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE);
+        }
+
         User user = userRepository.findByTenantIdAndEmail(tenantId, request.getEmail())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE));
 
         boolean passwordMatches = passwordEncoder.matches(request.getPassword(), user.getPasswordHash());
 
         if (!user.isActive() || !passwordMatches) {
+            loginAttemptService.recordFailure(tenantId, request.getEmail());
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE);
         }
+
+        loginAttemptService.recordSuccess(tenantId, request.getEmail());
 
         return issueTokenPair(user);
     }
@@ -107,7 +117,8 @@ public class AuthService {
         try {
             User user = userRepository.findById(userId)
                     .filter(u -> u.getTenant().getId().equals(tenantId))
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE));
+                    .orElseThrow(
+                            () -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE));
 
             if (!user.isActive()) {
                 throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE);

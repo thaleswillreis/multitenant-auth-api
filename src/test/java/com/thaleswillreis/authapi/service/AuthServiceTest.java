@@ -10,6 +10,7 @@ import com.thaleswillreis.authapi.model.User;
 import com.thaleswillreis.authapi.dto.RefreshRequest;
 import com.thaleswillreis.authapi.repository.OAuthClientRepository;
 import com.thaleswillreis.authapi.repository.UserRepository;
+import com.thaleswillreis.authapi.security.LoginAttemptService;
 import com.thaleswillreis.authapi.security.JwtService;
 import com.thaleswillreis.authapi.security.TokenBlacklistService;
 import com.thaleswillreis.authapi.tenant.TenantContext;
@@ -36,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,6 +48,9 @@ class AuthServiceTest {
 
     @Mock
     private TokenBlacklistService tokenBlacklistService;
+
+    @Mock
+    private LoginAttemptService loginAttemptService;
 
     @Mock
     private UserRepository userRepository;
@@ -72,7 +77,7 @@ class AuthServiceTest {
                 properties);
 
         authService = new AuthService(userRepository, oAuthClientRepository, passwordEncoder, jwtService, properties,
-                tokenBlacklistService);
+                tokenBlacklistService, loginAttemptService);
 
         tenantId = UUID.randomUUID();
         TenantContext.setCurrentTenant(tenantId);
@@ -88,6 +93,7 @@ class AuthServiceTest {
         User user = newUser(tenantId, "joao@acme.com", "correct-password", true);
 
         when(userRepository.findByTenantIdAndEmail(tenantId, "joao@acme.com")).thenReturn(Optional.of(user));
+        when(loginAttemptService.isLocked(tenantId, "joao@acme.com")).thenReturn(false);
 
         LoginResponse response = authService.login(loginRequest("joao@acme.com", "correct-password"));
 
@@ -101,6 +107,7 @@ class AuthServiceTest {
         User user = newUser(tenantId, "joao@acme.com", "correct-password", true);
 
         when(userRepository.findByTenantIdAndEmail(tenantId, "joao@acme.com")).thenReturn(Optional.of(user));
+        when(loginAttemptService.isLocked(tenantId, "joao@acme.com")).thenReturn(false);
 
         assertThatThrownBy(() -> authService.login(loginRequest("joao@acme.com", "wrong-password")))
                 .isInstanceOf(ResponseStatusException.class)
@@ -289,12 +296,48 @@ class AuthServiceTest {
     }
 
     private OAuthClient newOAuthClient(UUID tenantId, String clientId, String rawSecret) throws Exception {
-    Tenant tenant = new Tenant("Acme Corp", "acme");
-    setId(Tenant.class, tenant, tenantId);
+        Tenant tenant = new Tenant("Acme Corp", "acme");
+        setId(Tenant.class, tenant, tenantId);
 
-    OAuthClient client = new OAuthClient(tenant, "Test Client", clientId, passwordEncoder.encode(rawSecret));
-    setId(OAuthClient.class, client, UUID.randomUUID());
-    return client;
-}
+        OAuthClient client = new OAuthClient(tenant, "Test Client", clientId, passwordEncoder.encode(rawSecret));
+        setId(OAuthClient.class, client, UUID.randomUUID());
+        return client;
+    }
+
+    @Test
+    void loginFailsImmediatelyWhenAccountIsLocked() {
+        when(loginAttemptService.isLocked(tenantId, "joao@acme.com")).thenReturn(true);
+
+        assertThatThrownBy(() -> authService.login(loginRequest("joao@acme.com", "qualquer-senha")))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Credenciais invalidas");
+
+        verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    void loginRecordsFailureOnWrongPassword() throws Exception {
+        User user = newUser(tenantId, "joao@acme.com", "correct-password", true);
+
+        when(loginAttemptService.isLocked(tenantId, "joao@acme.com")).thenReturn(false);
+        when(userRepository.findByTenantIdAndEmail(tenantId, "joao@acme.com")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.login(loginRequest("joao@acme.com", "wrong-password")))
+                .isInstanceOf(ResponseStatusException.class);
+
+        verify(loginAttemptService).recordFailure(tenantId, "joao@acme.com");
+    }
+
+    @Test
+    void loginRecordsSuccessOnCorrectPassword() throws Exception {
+        User user = newUser(tenantId, "joao@acme.com", "correct-password", true);
+
+        when(loginAttemptService.isLocked(tenantId, "joao@acme.com")).thenReturn(false);
+        when(userRepository.findByTenantIdAndEmail(tenantId, "joao@acme.com")).thenReturn(Optional.of(user));
+
+        authService.login(loginRequest("joao@acme.com", "correct-password"));
+
+        verify(loginAttemptService).recordSuccess(tenantId, "joao@acme.com");
+    }
 
 }
