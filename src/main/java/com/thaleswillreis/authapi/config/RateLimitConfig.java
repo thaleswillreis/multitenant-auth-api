@@ -55,7 +55,7 @@ public class RateLimitConfig {
         FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new RateLimitFilter(rateLimitProxyManager, rateLimitProperties));
         registration.addUrlPatterns("/*");
-        registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
         return registration;
     }
 

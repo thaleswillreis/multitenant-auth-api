@@ -7,6 +7,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.MDC;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -19,6 +20,7 @@ import java.util.UUID;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final String MDC_TENANT_ID = "tenantId";
 
     private final JwtService jwtService;
     private final TokenBlacklistService tokenBlacklistService;
@@ -66,6 +68,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String userId = claims.getSubject();
 
             TenantContext.setCurrentTenant(tenantId);
+            MDC.put(MDC_TENANT_ID, tenantId.toString());
 
             List<String> permissions = claims.get("permissions", List.class);
             List<SimpleGrantedAuthority> authorities = permissions == null
@@ -80,6 +83,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token invalido ou expirado");
         } finally {
             TenantContext.clear();
+            MDC.remove(MDC_TENANT_ID);
         }
     }
 
