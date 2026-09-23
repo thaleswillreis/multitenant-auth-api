@@ -26,7 +26,7 @@ Em desenvolvimento — projeto de portfólio.
 - [x] **Fase 5 — Gestão de Sessão e Revogação (Redis)**
 - [x] **Fase 6 — OAuth2 para Aplicações Clientes**
 - [x] **Fase 7 — Segurança Avançada**
-- [ ] **Fase 8 — Testes**
+- [x] **Fase 8 — Testes**
 - [ ] **Fase 9 — Observabilidade e Documentação**
 - [ ] **Fase 10 — Finalização**
 

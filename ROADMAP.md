@@ -56,7 +56,7 @@
 
 - [x] **Tarefa 8.1** — Testes unitários (JUnit)
 - [x] **Tarefa 8.2** — Testes de integração com Testcontainers (Postgres + Redis reais)
-- [ ] **Tarefa 8.3** — Testes de segurança dos endpoints
+- [x] **Tarefa 8.3** — Testes de segurança dos endpoints
 
 ## Fase 9 — Observabilidade e Documentação
 
