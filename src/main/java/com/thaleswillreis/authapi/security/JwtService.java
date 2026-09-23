@@ -82,4 +82,20 @@ public class JwtService {
                 .compact();
     }
 
+    public String generateMfaChallengeToken(User user) {
+        long expirationMillis = jwtProperties.getMfaChallengeExpirationMinutes() * 60_000L;
+        Instant now = Instant.now();
+
+        return Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .issuer(jwtProperties.getIssuer())
+                .subject(user.getId().toString())
+                .claim("tenant_id", user.getTenant().getId().toString())
+                .claim("type", "mfa_challenge")
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusMillis(expirationMillis)))
+                .signWith(privateKey, Jwts.SIG.RS256)
+                .compact();
+    }
+
 }

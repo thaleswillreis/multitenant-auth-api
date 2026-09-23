@@ -4,14 +4,16 @@ import com.thaleswillreis.authapi.config.JwtProperties;
 import com.thaleswillreis.authapi.dto.ClientCredentialsRequest;
 import com.thaleswillreis.authapi.dto.LoginRequest;
 import com.thaleswillreis.authapi.dto.LoginResponse;
+import com.thaleswillreis.authapi.dto.MfaVerifyRequest;
+import com.thaleswillreis.authapi.dto.RefreshRequest;
 import com.thaleswillreis.authapi.model.OAuthClient;
 import com.thaleswillreis.authapi.model.Tenant;
 import com.thaleswillreis.authapi.model.User;
-import com.thaleswillreis.authapi.dto.RefreshRequest;
 import com.thaleswillreis.authapi.repository.OAuthClientRepository;
 import com.thaleswillreis.authapi.repository.UserRepository;
-import com.thaleswillreis.authapi.security.LoginAttemptService;
 import com.thaleswillreis.authapi.security.JwtService;
+import com.thaleswillreis.authapi.security.LoginAttemptService;
+import com.thaleswillreis.authapi.security.MfaCodeValidator;
 import com.thaleswillreis.authapi.security.SecurityAuditService;
 import com.thaleswillreis.authapi.security.TokenBlacklistService;
 import com.thaleswillreis.authapi.tenant.TenantContext;
@@ -61,6 +63,9 @@ class AuthServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private MfaCodeValidator mfaCodeValidator;
+
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private JwtService jwtService;
     private AuthService authService;
@@ -76,6 +81,7 @@ class AuthServiceTest {
         properties.setIssuer("test-issuer");
         properties.setAccessTokenExpirationMinutes(15);
         properties.setRefreshTokenExpirationDays(7);
+        properties.setMfaChallengeExpirationMinutes(5);
 
         jwtService = new JwtService(
                 (RSAPrivateKey) keyPair.getPrivate(),
@@ -83,7 +89,7 @@ class AuthServiceTest {
                 properties);
 
         authService = new AuthService(userRepository, oAuthClientRepository, passwordEncoder, jwtService, properties,
-                tokenBlacklistService, loginAttemptService, securityAuditService);
+                tokenBlacklistService, loginAttemptService, securityAuditService, mfaCodeValidator);
 
         tenantId = UUID.randomUUID();
         TenantContext.setCurrentTenant(tenantId);
@@ -106,6 +112,22 @@ class AuthServiceTest {
         assertThat(response.getAccessToken()).isNotBlank();
         assertThat(response.getRefreshToken()).isNotBlank();
         assertThat(response.getTokenType()).isEqualTo("Bearer");
+        assertThat(response.isMfaRequired()).isFalse();
+    }
+
+    @Test
+    void loginReturnsMfaChallengeWhenMfaEnabled() throws Exception {
+        User user = newUser(tenantId, "joao@acme.com", "correct-password", true);
+        user.setMfaEnabled(true);
+
+        when(userRepository.findByTenantIdAndEmail(tenantId, "joao@acme.com")).thenReturn(Optional.of(user));
+        when(loginAttemptService.isLocked(tenantId, "joao@acme.com")).thenReturn(false);
+
+        LoginResponse response = authService.login(loginRequest("joao@acme.com", "correct-password"), TEST_IP);
+
+        assertThat(response.isMfaRequired()).isTrue();
+        assertThat(response.getChallengeToken()).isNotBlank();
+        assertThat(response.getAccessToken()).isNull();
     }
 
     @Test
@@ -140,6 +162,58 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.login(loginRequest("joao@acme.com", "correct-password"), TEST_IP))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Credenciais invalidas");
+    }
+
+    @Test
+    void verifyMfaIssuesTokensWithValidCode() throws Exception {
+        User user = newUser(tenantId, "joao@acme.com", "senha123", true);
+        user.setMfaEnabled(true);
+        String challengeToken = jwtService.generateMfaChallengeToken(user);
+
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(mfaCodeValidator.isValid(user, "123456")).thenReturn(true);
+
+        MfaVerifyRequest request = new MfaVerifyRequest();
+        request.setChallengeToken(challengeToken);
+        request.setCode("123456");
+
+        LoginResponse response = authService.verifyMfa(request, TEST_IP);
+
+        assertThat(response.getAccessToken()).isNotBlank();
+        assertThat(response.getRefreshToken()).isNotBlank();
+        verify(tokenBlacklistService).blacklist(any(), any());
+    }
+
+    @Test
+    void verifyMfaRejectsInvalidCode() throws Exception {
+        User user = newUser(tenantId, "joao@acme.com", "senha123", true);
+        user.setMfaEnabled(true);
+        String challengeToken = jwtService.generateMfaChallengeToken(user);
+
+        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
+        when(mfaCodeValidator.isValid(user, "000000")).thenReturn(false);
+
+        MfaVerifyRequest request = new MfaVerifyRequest();
+        request.setChallengeToken(challengeToken);
+        request.setCode("000000");
+
+        assertThatThrownBy(() -> authService.verifyMfa(request, TEST_IP))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Codigo invalido");
+    }
+
+    @Test
+    void verifyMfaRejectsNonChallengeToken() throws Exception {
+        User user = newUser(tenantId, "joao@acme.com", "senha123", true);
+        String accessToken = jwtService.generateAccessToken(user);
+
+        MfaVerifyRequest request = new MfaVerifyRequest();
+        request.setChallengeToken(accessToken);
+        request.setCode("123456");
+
+        assertThatThrownBy(() -> authService.verifyMfa(request, TEST_IP))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Token de desafio invalido");
     }
 
     private LoginRequest loginRequest(String email, String password) {

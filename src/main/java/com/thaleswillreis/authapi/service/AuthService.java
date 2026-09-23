@@ -5,6 +5,7 @@ import com.thaleswillreis.authapi.dto.ClientCredentialsRequest;
 import com.thaleswillreis.authapi.dto.ClientTokenResponse;
 import com.thaleswillreis.authapi.dto.LoginRequest;
 import com.thaleswillreis.authapi.dto.LoginResponse;
+import com.thaleswillreis.authapi.dto.MfaVerifyRequest;
 import com.thaleswillreis.authapi.dto.RefreshRequest;
 import com.thaleswillreis.authapi.model.OAuthClient;
 import com.thaleswillreis.authapi.model.SecurityEventType;
@@ -13,6 +14,7 @@ import com.thaleswillreis.authapi.repository.OAuthClientRepository;
 import com.thaleswillreis.authapi.repository.UserRepository;
 import com.thaleswillreis.authapi.security.JwtService;
 import com.thaleswillreis.authapi.security.LoginAttemptService;
+import com.thaleswillreis.authapi.security.MfaCodeValidator;
 import com.thaleswillreis.authapi.security.SecurityAuditService;
 import com.thaleswillreis.authapi.security.TokenBlacklistService;
 import com.thaleswillreis.authapi.tenant.TenantContext;
@@ -41,11 +43,12 @@ public class AuthService {
     private final TokenBlacklistService tokenBlacklistService;
     private final LoginAttemptService loginAttemptService;
     private final SecurityAuditService securityAuditService;
+    private final MfaCodeValidator mfaCodeValidator;
 
     public AuthService(UserRepository userRepository, OAuthClientRepository oAuthClientRepository,
             PasswordEncoder passwordEncoder, JwtService jwtService, JwtProperties jwtProperties,
             TokenBlacklistService tokenBlacklistService, LoginAttemptService loginAttemptService,
-            SecurityAuditService securityAuditService) {
+            SecurityAuditService securityAuditService, MfaCodeValidator mfaCodeValidator) {
         this.userRepository = userRepository;
         this.oAuthClientRepository = oAuthClientRepository;
         this.passwordEncoder = passwordEncoder;
@@ -54,6 +57,7 @@ public class AuthService {
         this.tokenBlacklistService = tokenBlacklistService;
         this.loginAttemptService = loginAttemptService;
         this.securityAuditService = securityAuditService;
+        this.mfaCodeValidator = mfaCodeValidator;
     }
 
     @Transactional(readOnly = true)
@@ -82,9 +86,63 @@ public class AuthService {
         }
 
         loginAttemptService.recordSuccess(tenantId, request.getEmail());
-        securityAuditService.record(tenantId, SecurityEventType.LOGIN_SUCCESS, request.getEmail(), true, clientIp);
 
+        if (user.isMfaEnabled()) {
+            securityAuditService.record(tenantId, SecurityEventType.LOGIN_SUCCESS, request.getEmail(), true, clientIp);
+            String challengeToken = jwtService.generateMfaChallengeToken(user);
+            return LoginResponse.mfaChallenge(challengeToken);
+        }
+
+        securityAuditService.record(tenantId, SecurityEventType.LOGIN_SUCCESS, request.getEmail(), true, clientIp);
         return issueTokenPair(user);
+    }
+
+    @Transactional(readOnly = true)
+    public LoginResponse verifyMfa(MfaVerifyRequest request, String clientIp) {
+        Claims claims = parseTokenOrThrow(request.getChallengeToken());
+
+        if (!"mfa_challenge".equals(claims.get("type"))) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token de desafio invalido");
+        }
+
+        if (claims.getId() != null && tokenBlacklistService.isBlacklisted(claims.getId())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Desafio ja utilizado ou expirado");
+        }
+
+        UUID tenantId;
+        UUID userId;
+        try {
+            tenantId = UUID.fromString(claims.get("tenant_id", String.class));
+            userId = UUID.fromString(claims.getSubject());
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_TOKEN_MESSAGE);
+        }
+
+        TenantContext.setCurrentTenant(tenantId);
+        try {
+            User user = userRepository.findById(userId)
+                    .filter(u -> u.getTenant().getId().equals(tenantId))
+                    .orElse(null);
+
+            if (user == null || !user.isActive() || !user.isMfaEnabled()) {
+                securityAuditService.record(tenantId, SecurityEventType.MFA_VERIFY_FAILURE, null, false, clientIp);
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, INVALID_CREDENTIALS_MESSAGE);
+            }
+
+            if (!mfaCodeValidator.isValid(user, request.getCode())) {
+                securityAuditService.record(tenantId, SecurityEventType.MFA_VERIFY_FAILURE, user.getEmail(), false,
+                        clientIp);
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Codigo invalido");
+            }
+
+            tokenBlacklistService.blacklist(claims.getId(), claims.getExpiration().toInstant());
+            securityAuditService.record(tenantId, SecurityEventType.MFA_VERIFY_SUCCESS, user.getEmail(), true,
+                    clientIp);
+
+            return issueTokenPair(user);
+        } finally {
+            TenantContext.clear();
+        }
     }
 
     public void logout(String authorizationHeader, String clientIp) {

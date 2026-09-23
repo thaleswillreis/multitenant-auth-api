@@ -4,6 +4,7 @@ import com.thaleswillreis.authapi.dto.ClientCredentialsRequest;
 import com.thaleswillreis.authapi.dto.ClientTokenResponse;
 import com.thaleswillreis.authapi.dto.LoginRequest;
 import com.thaleswillreis.authapi.dto.LoginResponse;
+import com.thaleswillreis.authapi.dto.MfaVerifyRequest;
 import com.thaleswillreis.authapi.dto.RefreshRequest;
 import com.thaleswillreis.authapi.service.AuthService;
 import com.thaleswillreis.authapi.util.ClientIpResolver;
@@ -30,6 +31,11 @@ public class AuthController {
     @PostMapping("/login")
     public LoginResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         return authService.login(request, ClientIpResolver.resolve(httpRequest));
+    }
+
+    @PostMapping("/verify-mfa")
+    public LoginResponse verifyMfa(@Valid @RequestBody MfaVerifyRequest request, HttpServletRequest httpRequest) {
+        return authService.verifyMfa(request, ClientIpResolver.resolve(httpRequest));
     }
 
     @PostMapping("/logout")

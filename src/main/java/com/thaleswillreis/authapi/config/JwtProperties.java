@@ -9,6 +9,7 @@ public class JwtProperties {
 
     private String issuer;
     private long accessTokenExpirationMinutes;
+    private long mfaChallengeExpirationMinutes;
     private long refreshTokenExpirationDays;
 
     public String getIssuer() {
@@ -33,6 +34,14 @@ public class JwtProperties {
 
     public void setRefreshTokenExpirationDays(long refreshTokenExpirationDays) {
         this.refreshTokenExpirationDays = refreshTokenExpirationDays;
+    }
+
+    public long getMfaChallengeExpirationMinutes() {
+        return mfaChallengeExpirationMinutes;
+    }
+
+    public void setMfaChallengeExpirationMinutes(long mfaChallengeExpirationMinutes) {
+        this.mfaChallengeExpirationMinutes = mfaChallengeExpirationMinutes;
     }
 
 }

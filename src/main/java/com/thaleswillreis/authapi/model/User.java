@@ -25,13 +25,8 @@ import org.hibernate.annotations.ParamDef;
 @Entity
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = UUID.class))
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
-@Table(
-        name = "users",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_users_tenant_email",
-                columnNames = {"tenant_id", "email"}
-        )
-)
+@Table(name = "users", uniqueConstraints = @UniqueConstraint(name = "uk_users_tenant_email", columnNames = {
+        "tenant_id", "email" }))
 public class User {
 
     @Id
@@ -54,12 +49,14 @@ public class User {
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
+    @Column(name = "mfa_enabled", nullable = false)
+    private boolean mfaEnabled = false;
+
+    @Column(name = "mfa_secret_encrypted", length = 255)
+    private String mfaSecretEncrypted;
+
     @ManyToMany(fetch = FetchType.LAZY)
-    @JoinTable(
-            name = "user_roles",
-            joinColumns = @JoinColumn(name = "user_id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id")
-    )
+    @JoinTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"), inverseJoinColumns = @JoinColumn(name = "role_id"))
     private Set<Role> roles = new HashSet<>();
 
     protected User() {
@@ -108,6 +105,22 @@ public class User {
 
     public OffsetDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public boolean isMfaEnabled() {
+        return mfaEnabled;
+    }
+
+    public void setMfaEnabled(boolean mfaEnabled) {
+        this.mfaEnabled = mfaEnabled;
+    }
+
+    public String getMfaSecretEncrypted() {
+        return mfaSecretEncrypted;
+    }
+
+    public void setMfaSecretEncrypted(String mfaSecretEncrypted) {
+        this.mfaSecretEncrypted = mfaSecretEncrypted;
     }
 
     public Set<Role> getRoles() {

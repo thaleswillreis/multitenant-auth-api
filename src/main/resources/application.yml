@@ -23,9 +23,12 @@ app:
     issuer: multitenant-auth-api
     access-token-expiration-minutes: 15
     refresh-token-expiration-days: 7
+    mfa-challenge-expiration-minutes: 5
   rate-limit:
     capacity: 100
     refill-duration-seconds: 60
+  mfa:
+    encryption-key: ${MFA_ENCRYPTION_KEY:}
 
 server:
   port: 8080
