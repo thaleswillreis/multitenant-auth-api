@@ -61,7 +61,7 @@
 ## Fase 9 — Observabilidade e Documentação
 
 - [x] **Tarefa 9.1** — Logs estruturados
-- [ ] **Tarefa 9.2** — Métricas
+- [x] **Tarefa 9.2** — Métricas
 - [ ] **Tarefa 9.3** — Documentação da API (OpenAPI/Swagger)
 
 ## Fase 10 — Finalização

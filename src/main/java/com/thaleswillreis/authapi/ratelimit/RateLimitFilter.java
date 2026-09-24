@@ -7,6 +7,7 @@ import io.github.bucket4j.Bucket;
 import io.github.bucket4j.BucketConfiguration;
 import io.github.bucket4j.ConsumptionProbe;
 import io.github.bucket4j.distributed.proxy.ProxyManager;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,10 +24,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final ProxyManager<String> proxyManager;
     private final RateLimitProperties rateLimitProperties;
+    private final MeterRegistry meterRegistry;
 
-    public RateLimitFilter(ProxyManager<String> proxyManager, RateLimitProperties rateLimitProperties) {
+    public RateLimitFilter(ProxyManager<String> proxyManager, RateLimitProperties rateLimitProperties,
+            MeterRegistry meterRegistry) {
         this.proxyManager = proxyManager;
         this.rateLimitProperties = rateLimitProperties;
+        this.meterRegistry = meterRegistry;
     }
 
     @Override
@@ -51,8 +55,6 @@ public class RateLimitFilter extends OncePerRequestFilter {
             remaining = probe.getRemainingTokens();
             waitSeconds = (long) Math.ceil(probe.getNanosToWaitForRefill() / 1_000_000_000.0);
         } catch (RuntimeException ex) {
-            // Fail-open: se o Redis estiver indisponivel, o rate limiter nao deve derrubar
-            // a API.
             allowed = true;
         }
 
@@ -63,6 +65,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
+
+        meterRegistry.counter("rate_limit_rejections_total").increment();
 
         response.setHeader("X-RateLimit-Remaining", "0");
         response.setHeader("Retry-After", String.valueOf(waitSeconds));

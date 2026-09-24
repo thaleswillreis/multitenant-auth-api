@@ -10,6 +10,7 @@ import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.codec.ByteArrayCodec;
 import io.lettuce.core.codec.RedisCodec;
 import io.lettuce.core.codec.StringCodec;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.autoconfigure.data.redis.RedisConnectionDetails;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -51,9 +52,10 @@ public class RateLimitConfig {
     @Bean
     public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(
             ProxyManager<String> rateLimitProxyManager,
-            RateLimitProperties rateLimitProperties) {
+            RateLimitProperties rateLimitProperties,
+            MeterRegistry meterRegistry) {
         FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new RateLimitFilter(rateLimitProxyManager, rateLimitProperties));
+        registration.setFilter(new RateLimitFilter(rateLimitProxyManager, rateLimitProperties, meterRegistry));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
         return registration;
