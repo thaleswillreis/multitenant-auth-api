@@ -66,7 +66,7 @@
 
 ## Fase 10 — Finalização
 
-- [ ] **Tarefa 10.1** — CI/CD (GitHub Actions)
-- [ ] **Tarefa 10.2** — Docker multi-stage
+- [x] **Tarefa 10.1** — CI/CD (GitHub Actions)
+- [x] **Tarefa 10.2** — Docker multi-stage
 - [ ] **Tarefa 10.3** — README completo e final
 - [ ] **Tarefa 10.4** — Deploy didático
