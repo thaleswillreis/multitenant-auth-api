@@ -27,7 +27,7 @@ Em desenvolvimento — projeto de portfólio.
 - [x] **Fase 6 — OAuth2 para Aplicações Clientes**
 - [x] **Fase 7 — Segurança Avançada**
 - [x] **Fase 8 — Testes**
-- [ ] **Fase 9 — Observabilidade e Documentação**
+- [x] **Fase 9 — Observabilidade e Documentação**
 - [ ] **Fase 10 — Finalização**
 
 > **OBS:** Para visualizar o roteiro detalhado, contendo as tarefas de cada fase, acesse o [**ROADMAP**](https://github.com/thaleswillreis/multitenant-auth-api/blob/main/ROADMAP.md) do projeto.

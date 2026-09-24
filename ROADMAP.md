@@ -62,7 +62,7 @@
 
 - [x] **Tarefa 9.1** — Logs estruturados
 - [x] **Tarefa 9.2** — Métricas
-- [ ] **Tarefa 9.3** — Documentação da API (OpenAPI/Swagger)
+- [x] **Tarefa 9.3** — Documentação da API (OpenAPI/Swagger)
 
 ## Fase 10 — Finalização
 
